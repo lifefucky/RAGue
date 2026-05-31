@@ -1,0 +1,53 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+credentials/
+
+# Python runtime
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# IDE and OS
+.cursor/
+.DS_Store
+.idea/
+.vscode/
+
+# Generated ingestion reports (may contain run config)
+changelog/*.md
+!changelog/.gitkeep
+
+# Local exports and sample data (internal Confluence content)
+docs/
+data/
+
+# Legacy prototype (not part of the ingestion pipeline)
+confluence.py
+
+# Legacy top-level package locations replaced by `rague/`
+/collect_data/
+/embeddings/
+/sources/
+/text_splitters/
+/vectorstores/
+
+# Unrelated experiments (PDF/OCR, not Confluence -> Qdrant)
+comparison/
