@@ -23,6 +23,9 @@ PAYLOAD_INDEX_FIELDS = (
     "ingested_at",
     "parent_page_id",
     "is_current",
+    "chunk_type",
+    "code_language",
+    "code_ref",
 )
 
 
