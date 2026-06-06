@@ -50,7 +50,7 @@ def create_embedder(
 
     if selected_provider in {"sentence_transformers", "local"}:
         return _create_sentence_transformers_embedder(
-            model_name=selected_model or "sentence-transformers/all-MiniLM-L6-v2",
+            model_name=selected_model or "intfloat/multilingual-e5-base",
             vector_size=selected_vector_size,
         )
 
@@ -97,6 +97,19 @@ def _create_openai_compatible_embedder(
     return OpenAICompatibleEmbedder(embedder, model_name, vector_size)
 
 
+def _is_e5_model(model_name: str) -> bool:
+    normalized = model_name.casefold()
+    return "e5" in normalized
+
+
+def _prefix_e5_passages(texts: list[str]) -> list[str]:
+    prefix = "passage: "
+    return [
+        text if text.casefold().startswith(prefix) else f"{prefix}{text}"
+        for text in texts
+    ]
+
+
 def _create_sentence_transformers_embedder(
     *,
     model_name: str,
@@ -111,16 +124,22 @@ def _create_sentence_transformers_embedder(
         )
         raise ImportError(message) from error
 
-    embedder = HuggingFaceEmbeddings(model_name=model_name)
+    embedder = HuggingFaceEmbeddings(
+        model_name=model_name,
+        encode_kwargs={"normalize_embeddings": True},
+    )
+    uses_e5_prefix = _is_e5_model(model_name)
 
     class SentenceTransformersEmbedder:
         def __init__(self, inner: HuggingFaceEmbeddings, name: str, size: int) -> None:
             self._inner = inner
             self.model_name = name
             self.vector_size = size
+            self._uses_e5_prefix = uses_e5_prefix
 
         def embed_documents(self, texts: list[str]) -> list[list[float]]:
-            return self._inner.embed_documents(texts)
+            prepared = _prefix_e5_passages(texts) if self._uses_e5_prefix else texts
+            return self._inner.embed_documents(prepared)
 
     return SentenceTransformersEmbedder(embedder, model_name, vector_size)
 

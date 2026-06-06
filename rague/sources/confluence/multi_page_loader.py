@@ -96,10 +96,10 @@ class ConfluenceMultiPageLoader(BaseLoader):
             if self._is_updated_after(page_id, self.updated_after)
         ]
 
-    def lazy_load(self) -> Iterator[Document]:
-        """Yield one `Document` per discovered Confluence page."""
-        for page_id in self.discover_page_ids():
-            page = self._get_page(page_id, include_body=True)
+    def load_page_ids(self, page_ids: Sequence[str | int]) -> Iterator[Document]:
+        """Yield documents for explicit page IDs without running discovery."""
+        for page_id in page_ids:
+            page = self._get_page(str(page_id), include_body=True)
             markdown = confluence_html_to_markdown(
                 _page_body(page, self.content_format)
             )
@@ -110,6 +110,10 @@ class ConfluenceMultiPageLoader(BaseLoader):
                 page_content=markdown,
                 metadata=metadata,
             )
+
+    def lazy_load(self) -> Iterator[Document]:
+        """Yield one `Document` per discovered Confluence page."""
+        yield from self.load_page_ids(self.discover_page_ids())
 
     def save_attachment_samples(
         self,

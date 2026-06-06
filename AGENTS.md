@@ -28,7 +28,8 @@ description of its contents and purpose.
 - `rague/sources/confluence/multi_page_loader.py` - multi-page Confluence loader for parent-page, space-key, and explicit page-id scopes.
 - `rague/ingestion/` - ingestion orchestration workflows.
 - `rague/ingestion/confluence_to_qdrant.py` - end-to-end loader + splitter + embedder + Qdrant upsert entrypoint.
-- `rague/ingestion/changelog.py` - Markdown changelog writer for ingestion runs.
+- `rague/ingestion/changelog.py` - Markdown changelog writer and chunk statistics for ingestion runs.
+- `rague/ingestion/logging_config.py` - terminal logging setup for ingestion CLI progress output.
 - `rague/chunking/` - text splitting utilities.
 - `rague/chunking/markdown.py` - Markdown-aware LangChain splitter that preserves header metadata.
 - `rague/embeddings/` - pluggable embedding backend abstraction and factory.
@@ -47,6 +48,7 @@ description of its contents and purpose.
 
 - `docs_design/architecture.md` - early architecture draft for RAG, hybrid retrieval, reranking, Qdrant, agentic workflow, and citation metrics.
 - `docs_design/implementation_considerations.md` - practical notes on large Confluence spaces, duplicate discovery, and attachment ingestion.
+- `docs_design/ingestion_logging.md` - ingestion progress logging, terminal summary, chunk/attachment stats, and changelog reporting rules.
 - `docs_design/ingestion_plan.md` - planning notes and architectural decisions for collecting Confluence data into Qdrant.
 - `docs_design/metrics.md` - notes on retrieval, reranking, generation, and citation metrics.
 - `docs_design/optional_features.md` - optional future ideas for agent execution, consensus, and quality control.
@@ -55,3 +57,4 @@ description of its contents and purpose.
 
 - `tests/__init__.py` - test package marker.
 - `tests/test_ingestion_smoke.py` - smoke tests for ingestion-adjacent behavior such as attachment sample collection.
+- `tests/test_chunk_run_stats.py` - unit tests for ingestion chunk statistics and changelog chunk summary rendering.

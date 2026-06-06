@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import time
 import traceback
 from datetime import datetime, timezone
 from typing import Any
@@ -11,6 +12,7 @@ from typing import Any
 from rague.chunking import MarkdownDocumentTextSplitter
 from rague.embeddings.factory import create_embedder
 from rague.ingestion.changelog import IngestionRunReport
+from rague.ingestion.logging_config import configure_ingestion_logging, get_ingestion_logger
 from rague.sources.confluence.multi_page_loader import (
     DEFAULT_UPDATED_AFTER,
     ConfluenceMultiPageLoader,
@@ -23,11 +25,25 @@ from rague.vectorstores.qdrant_store import (
 
 
 def run_ingestion(config: dict[str, Any]) -> IngestionRunReport:
+    logger = get_ingestion_logger()
+    run_started = time.perf_counter()
     scope = _describe_scope(config)
+
+    logger.info(
+        "Embedder: provider=%s model=%s vector_size=%s",
+        config.get("embedding_provider") or os.getenv("EMBEDDING_PROVIDER", "deterministic"),
+        config.get("embedding_model") or os.getenv("EMBEDDING_MODEL", "default"),
+        config.get("embedding_vector_size") or os.getenv("EMBEDDING_VECTOR_SIZE", "384"),
+    )
     embedder = create_embedder(
         provider=config.get("embedding_provider"),
         model_name=config.get("embedding_model"),
         vector_size=config.get("embedding_vector_size"),
+    )
+    logger.info(
+        "Embedder ready: model=%s vector_size=%d",
+        embedder.model_name,
+        embedder.vector_size,
     )
 
     report = IngestionRunReport(
@@ -49,11 +65,19 @@ def run_ingestion(config: dict[str, Any]) -> IngestionRunReport:
         )
         store.ensure_collection()
         report.worked.append("Ensured Qdrant collection and payload indexes.")
+        logger.info(
+            "Qdrant collection ready: %s (%d dim)",
+            report.collection_name,
+            embedder.vector_size,
+        )
 
         updated_after = _resolve_updated_after(store, config)
+        logger.info("Incremental cutoff: updated_after=%s", updated_after.isoformat())
+
         loader = ConfluenceMultiPageLoader(
             url=config["confluence_url"],
             username=config.get("confluence_username"),
+            password=config.get("confluence_password"),
             api_token=config.get("confluence_api_token"),
             parent_page_id=config.get("parent_page_id"),
             space_key=config.get("space_key"),
@@ -66,6 +90,8 @@ def run_ingestion(config: dict[str, Any]) -> IngestionRunReport:
         discovered_ids = loader.discover_page_ids()
         report.pages_discovered = len(discovered_ids)
         report.worked.append(f"Discovered {len(discovered_ids)} page(s) for ingestion.")
+        total_pages = report.pages_discovered
+        logger.info("Discovered %d page(s), scope=%s", total_pages, scope)
 
         splitter = MarkdownDocumentTextSplitter(
             chunk_size=config.get("chunk_size", 1200),
@@ -77,8 +103,12 @@ def run_ingestion(config: dict[str, Any]) -> IngestionRunReport:
         )
         sampled_attachment_extensions: set[str] = set()
 
-        for document in loader.lazy_load():
+        for page_index, document in enumerate(
+            loader.load_page_ids(discovered_ids), start=1
+        ):
             page_id = str(document.metadata.get("page_id") or document.id)
+            title = str(document.metadata.get("title", "unknown"))
+            page_started = time.perf_counter()
             try:
                 attachment_stats = loader.save_attachment_samples(
                     page_id,
@@ -98,21 +128,43 @@ def run_ingestion(config: dict[str, Any]) -> IngestionRunReport:
                         "Saved attachment sample(s) for page "
                         f"`{page_id}`: {', '.join(attachment_stats['extensions'])}."
                     )
+                    logger.debug(
+                        "[%4d/%4d] page %s attachment samples saved: %s",
+                        page_index,
+                        total_pages,
+                        page_id,
+                        ", ".join(attachment_stats["extensions"]),
+                    )
 
                 if not document.page_content.strip():
                     report.pages_skipped += 1
                     report.removed.append(f"Skipped empty page `{page_id}`.")
+                    logger.warning(
+                        "[%4d/%4d] page %s %r -> skipped (empty content)",
+                        page_index,
+                        total_pages,
+                        page_id,
+                        title,
+                    )
                     continue
 
                 chunks = splitter.split_documents([document])
                 chunks = [enrich_chunk_metadata(chunk) for chunk in chunks]
                 report.chunks_created += len(chunks)
+                report.chunk_stats.record_page(chunks)
 
                 deleted = store.delete_by_page_id(page_id)
                 report.points_deleted += deleted
                 if deleted:
                     report.removed.append(
                         f"Deleted `{deleted}` old point(s) for page `{page_id}`."
+                    )
+                    logger.debug(
+                        "[%4d/%4d] page %s deleted %d old point(s)",
+                        page_index,
+                        total_pages,
+                        page_id,
+                        deleted,
                     )
 
                 vectors = embedder.embed_documents(
@@ -124,10 +176,36 @@ def run_ingestion(config: dict[str, Any]) -> IngestionRunReport:
                 report.added.append(
                     f"Upserted `{upserted}` chunk point(s) for page `{page_id}`."
                 )
+                elapsed = time.perf_counter() - page_started
+                logger.info(
+                    "[%4d/%4d] page %s %r -> %d chunks, %d upserted (%.1fs)",
+                    page_index,
+                    total_pages,
+                    page_id,
+                    title,
+                    len(chunks),
+                    upserted,
+                    elapsed,
+                )
             except Exception as error:
                 report.pages_failed += 1
                 report.failed.append(f"Failed to ingest page `{page_id}`: {error}")
                 report.errors.append(traceback.format_exc(limit=3))
+                elapsed = time.perf_counter() - page_started
+                logger.error(
+                    "[%4d/%4d] page %s %r -> failed: %s (%.1fs)",
+                    page_index,
+                    total_pages,
+                    page_id,
+                    title,
+                    error,
+                    elapsed,
+                )
+                logger.debug(
+                    "Traceback for page %s:\n%s",
+                    page_id,
+                    traceback.format_exc(),
+                )
 
         if report.pages_loaded:
             report.worked.append(
@@ -141,9 +219,13 @@ def run_ingestion(config: dict[str, Any]) -> IngestionRunReport:
     except Exception as error:
         report.failed.append(f"Ingestion pipeline failed: {error}")
         report.errors.append(traceback.format_exc(limit=5))
+        logger.error("Ingestion pipeline failed: %s", error)
+        logger.debug("Pipeline traceback:\n%s", traceback.format_exc())
     finally:
+        report.duration_seconds = time.perf_counter() - run_started
         changelog_dir = config.get("changelog_dir", "changelog")
         report.write_markdown(changelog_dir)
+        report.print_summary()
 
     return report
 
@@ -192,6 +274,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--confluence-url", default=os.getenv("CONFLUENCE_URL"))
     parser.add_argument("--confluence-username", default=os.getenv("CONFLUENCE_USERNAME"))
+    parser.add_argument("--confluence-password", default=os.getenv("CONFLUENCE_PASSWORD"))
     parser.add_argument("--confluence-api-token", default=os.getenv("CONFLUENCE_API_TOKEN"))
     parser.add_argument("--parent-page-id", default=os.getenv("CONFLUENCE_PARENT_PAGE_ID"))
     parser.add_argument("--space-key", default=os.getenv("CONFLUENCE_SPACE_KEY"))
@@ -222,12 +305,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--attachment-sample-dir",
         default=os.getenv("ATTACHMENT_SAMPLE_DIR", "data/attachment_samples"),
     )
+    parser.add_argument(
+        "--log-level",
+        default=os.getenv("LOG_LEVEL", "INFO"),
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+    )
     return parser
 
 
 def main() -> None:
     parser = build_arg_parser()
     args = parser.parse_args()
+    configure_ingestion_logging(args.log_level)
 
     if not args.confluence_url:
         parser.error("`--confluence-url` or `CONFLUENCE_URL` is required.")
@@ -239,6 +328,7 @@ def main() -> None:
     config = {
         "confluence_url": args.confluence_url,
         "confluence_username": args.confluence_username or None,
+        "confluence_password": args.confluence_password or None,
         "confluence_api_token": args.confluence_api_token or None,
         "parent_page_id": args.parent_page_id or None,
         "space_key": args.space_key or None,
@@ -256,14 +346,10 @@ def main() -> None:
         "content_format": args.content_format,
         "changelog_dir": args.changelog_dir,
         "attachment_sample_dir": args.attachment_sample_dir,
+        "log_level": args.log_level,
     }
 
-    report = run_ingestion(config)
-    print(
-        "Ingestion finished: "
-        f"loaded={report.pages_loaded}, failed={report.pages_failed}, "
-        f"upserted={report.points_upserted}"
-    )
+    run_ingestion(config)
 
 
 if __name__ == "__main__":
