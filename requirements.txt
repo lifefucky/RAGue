@@ -5,7 +5,8 @@ atlassian-python-api>=3.41.0
 beautifulsoup4>=4.12.0
 markdownify>=0.13.0
 lxml>=5.0.0
-qdrant-client>=1.9.0
+qdrant-client>=1.10.0
+rank-bm25>=0.2.2
 
 # Local embedding backend (intfloat/multilingual-e5-base)
 # Pinned for Intel Mac x86_64 where torch is capped at 2.2.x
@@ -14,6 +15,6 @@ torch>=2.2.0,<2.3
 transformers>=4.40,<5
 sentence-transformers>=3.0,<4
 langchain-community>=0.3.0
-
-# Optional OpenAI-compatible backend
-# langchain-openai>=0.2.0
+langgraph>=0.2.0
+langchain-openai>=0.2.0
+pyyaml>=6.0.0

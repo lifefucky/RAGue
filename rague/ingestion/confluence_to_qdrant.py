@@ -19,6 +19,8 @@ from rague.sources.confluence.multi_page_loader import (
 )
 from rague.vectorstores.qdrant_store import (
     DEFAULT_COLLECTION,
+    DEFAULT_HNSW_FULL_SCAN_THRESHOLD,
+    HnswIndexConfig,
     QdrantChunkStore,
     enrich_chunk_metadata,
 )
@@ -62,6 +64,14 @@ def run_ingestion(config: dict[str, Any]) -> IngestionRunReport:
             collection_name=report.collection_name,
             vector_size=embedder.vector_size,
             distance=config.get("distance", "Cosine"),
+            hnsw_config=HnswIndexConfig(
+                m=config.get("hnsw_m"),
+                ef_construct=config.get("hnsw_ef_construct"),
+                full_scan_threshold=(
+                    config.get("hnsw_full_scan_threshold")
+                    or DEFAULT_HNSW_FULL_SCAN_THRESHOLD
+                ),
+            ),
         )
         store.ensure_collection()
         report.worked.append("Ensured Qdrant collection and payload indexes.")
@@ -268,6 +278,13 @@ def _public_config(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _optional_env_int(name: str) -> int | None:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return None
+    return int(value)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Load Confluence pages, split, embed, and upsert chunks into Qdrant."
@@ -283,6 +300,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--collection-name",
         default=os.getenv("QDRANT_COLLECTION", DEFAULT_COLLECTION),
+    )
+    parser.add_argument("--hnsw-m", type=int, default=_optional_env_int("QDRANT_HNSW_M"))
+    parser.add_argument(
+        "--hnsw-ef-construct",
+        type=int,
+        default=_optional_env_int("QDRANT_HNSW_EF_CONSTRUCT"),
+    )
+    parser.add_argument(
+        "--hnsw-full-scan-threshold",
+        type=int,
+        default=_optional_env_int("QDRANT_HNSW_FULL_SCAN_THRESHOLD")
+        or DEFAULT_HNSW_FULL_SCAN_THRESHOLD,
     )
     parser.add_argument(
         "--embedding-provider",
@@ -335,6 +364,9 @@ def main() -> None:
         "page_ids": page_ids,
         "qdrant_url": args.qdrant_url,
         "collection_name": args.collection_name,
+        "hnsw_m": args.hnsw_m,
+        "hnsw_ef_construct": args.hnsw_ef_construct,
+        "hnsw_full_scan_threshold": args.hnsw_full_scan_threshold,
         "embedding_provider": args.embedding_provider,
         "embedding_model": args.embedding_model,
         "embedding_vector_size": args.embedding_vector_size,

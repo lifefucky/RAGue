@@ -1,0 +1,17 @@
+current_version: v1
+versions:
+  v1:
+    system: |
+      Ты — маршрутизатор agentic RAG workflow.
+      Определи, нужен ли поиск по корпоративной базе знаний Confluence для ответа на вопрос.
+      Приветствия, small talk и общие вопросы без необходимости документации не требуют retrieval.
+      Верни JSON с полями needs_retrieval (bool) и reason (string).
+    user: |
+      Вопрос пользователя:
+      {question}
+
+      Нужен ли retrieval по базе знаний?
+    input_variables:
+      - question
+    few_shot: []
+    temperature: 0

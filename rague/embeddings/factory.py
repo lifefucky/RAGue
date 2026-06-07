@@ -20,6 +20,9 @@ class DeterministicHashEmbedder:
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return [_hash_to_vector(text, self.vector_size) for text in texts]
 
+    def embed_query(self, text: str) -> list[float]:
+        return _hash_to_vector(text, self.vector_size)
+
 
 def create_embedder(
     *,
@@ -94,6 +97,9 @@ def _create_openai_compatible_embedder(
         def embed_documents(self, texts: list[str]) -> list[list[float]]:
             return self._inner.embed_documents(texts)
 
+        def embed_query(self, text: str) -> list[float]:
+            return self._inner.embed_query(text)
+
     return OpenAICompatibleEmbedder(embedder, model_name, vector_size)
 
 
@@ -108,6 +114,13 @@ def _prefix_e5_passages(texts: list[str]) -> list[str]:
         text if text.casefold().startswith(prefix) else f"{prefix}{text}"
         for text in texts
     ]
+
+
+def _prefix_e5_query(text: str) -> str:
+    prefix = "query: "
+    if text.casefold().startswith(prefix):
+        return text
+    return f"{prefix}{text}"
 
 
 def _create_sentence_transformers_embedder(
@@ -140,6 +153,10 @@ def _create_sentence_transformers_embedder(
         def embed_documents(self, texts: list[str]) -> list[list[float]]:
             prepared = _prefix_e5_passages(texts) if self._uses_e5_prefix else texts
             return self._inner.embed_documents(prepared)
+
+        def embed_query(self, text: str) -> list[float]:
+            prepared = _prefix_e5_query(text) if self._uses_e5_prefix else text
+            return self._inner.embed_query(prepared)
 
     return SentenceTransformersEmbedder(embedder, model_name, vector_size)
 

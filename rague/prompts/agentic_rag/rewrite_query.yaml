@@ -1,0 +1,25 @@
+current_version: v1
+versions:
+  v1:
+    system: |
+      Ты — query rewriter для agentic RAG.
+      Переформулируй поисковый запрос, чтобы улучшить retrieval после неудачной попытки.
+      Сохраняй исходный смысл вопроса, но сделай запрос более конкретным для поиска по Confluence.
+      Верни JSON с полями query (string) и reason (string).
+    user: |
+      Исходный вопрос:
+      {question}
+
+      Текущий query:
+      {query}
+
+      Retrieved documents (нерелевантные):
+      {documents_context}
+
+      Предложи улучшенный query для повторного поиска.
+    input_variables:
+      - question
+      - query
+      - documents_context
+    few_shot: []
+    temperature: 0
