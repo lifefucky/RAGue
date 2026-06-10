@@ -84,6 +84,52 @@ def test_rewrite_query_returns_new_query() -> None:
     assert rewritten == "refined query"
 
 
+def test_generate_answer_receives_expanded_code_context() -> None:
+    code_ref = "confluence:page:131304575:v8:code:1"
+    sql = "select guid from meta.dq_log_error"
+    document = Document(
+        page_content=f"Тип: SQL\nПолный код: {code_ref}",
+        metadata={
+            "source_type": "confluence",
+            "document_type": "page",
+            "document_id": "confluence:page:131304575",
+            "chunk_type": "code_summary",
+            "code_language": "sql",
+            "raw_code": sql,
+            "chunk_id": code_ref,
+            "page_id": "131304575",
+            "title": "Asmodeus DQ",
+            "path": "Data/DQ",
+            "source": "https://wiki.example/pages/viewpage.action?pageId=131304575",
+            "source_updated_at": "2026-06-06T10:00:00+00:00",
+            "ingested_at": "2026-06-06T11:00:00+00:00",
+        },
+        id=code_ref,
+    )
+    context = build_citation_context([document])
+    captured_messages: list[object] = []
+
+    class CapturingChatModel:
+        def with_structured_output(self, output_model):
+            del output_model
+            return self
+
+        def invoke(self, messages):
+            captured_messages.append(messages)
+            return GeneratedAnswerOutput(
+                claims=[ClaimOutput(text="SQL script", chunk_ids=[code_ref])]
+            )
+
+    decisions = AgentLlmDecisions(CapturingChatModel())
+    generated = decisions.generate_answer("Какой script для meta.dq_log_error?", [document], context)
+
+    assert generated.claim_specs == [("SQL script", [code_ref])]
+    assert captured_messages
+    human_content = captured_messages[0][-1].content
+    assert "full_code:" in human_content
+    assert sql in human_content
+
+
 def test_generate_answer_returns_claim_specs_and_filters_unknown_ids() -> None:
     documents = [_page_doc(chunk_id="chunk-1")]
     context = build_citation_context(documents)

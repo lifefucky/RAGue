@@ -94,14 +94,16 @@ def generated_output_to_generated_answer(
         claims = filter_claim_chunk_ids(claims, allowed_chunk_ids)
 
     claim_specs = [(claim.text, list(claim.chunk_ids)) for claim in claims if claim.text]
+    answer_text = (output.answer_text or "").strip() or None
+
     if claim_specs:
         return GeneratedAnswer(
+            answer_text=answer_text,
             claim_specs=claim_specs,
             intro=output.intro,
             summary=output.summary,
         )
 
-    answer_text = (output.answer_text or "").strip()
     if answer_text:
         return GeneratedAnswer(
             answer_text=answer_text,

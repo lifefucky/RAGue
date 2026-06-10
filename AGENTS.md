@@ -18,6 +18,8 @@ description of its contents and purpose.
 - `docker-compose.qdrant.yml` - local Qdrant service for development.
 - `.env.example` - safe template for local environment variables.
 - `changelog/` - generated ingestion run reports; Markdown reports are ignored by git.
+- `data/evaluation/` - corpus-bound labeled evaluation datasets for opt-in Qdrant/LLM runs.
+- `data/evaluation/runs/` - pretty-printed JSON trace artifacts (`indent=2`, blank line between cases) from `agent-trace` evaluation runs.
 
 ## `rague/` Navigation
 
@@ -55,12 +57,29 @@ description of its contents and purpose.
 - `rague/agents/prompts.py` - YAML prompt loader, chat prompt builder, and document context formatter.
 - `rague/agents/parsers.py` - structured output schemas and JSON fallback parsers for agent decisions.
 - `rague/agents/decisions.py` - `AgentLlmDecisions` adapter mapping YAML prompts + LLM outputs to workflow callables.
-- `rague/evaluation/` - future RAG evaluation utilities.
-- `rague/evaluation/metrics.py` - RAG evaluation metrics including citation rate for structured cited answers.
+- `rague/evaluation/` - RAG evaluation utilities for retrieval, routing, generation, citations, HNSW benchmarks, and reporting.
+- `rague/evaluation/metrics.py` - retrieval and generation metrics including `Precision@K`, `Recall@K`, `MRR`, `NDCG`, citation rate, answer contains score, and citation compliance.
+- `rague/evaluation/dataset.py` - `EvaluationCase` model and JSON dataset loader for labeled evaluation questions.
+- `rague/evaluation/runner.py` - `evaluate_retrieval_cases()` runner over a callable question-to-doc-ids interface.
+- `rague/evaluation/retrieval.py` - document id adapters and `evaluate_retriever_cases()` for LangChain retrievers.
+- `rague/evaluation/routing.py` - `evaluate_should_retrieve_cases()` for agent routing accuracy.
+- `rague/evaluation/generation.py` - lightweight generation evaluation with answer contains and citation compliance checks.
+- `rague/evaluation/agent.py` - agent end-to-end evaluation wrapper over workflow state.
+- `rague/evaluation/agent_trace.py` - traced agent evaluation runner with per-case retrieval funnel and LLM rationale logging.
+- `rague/evaluation/tracing.py` - trace schema, document summarization, JSONL writer, and Markdown trace summaries.
+- `rague/evaluation/hnsw_benchmark.py` - opt-in HNSW recall/latency benchmark harness.
+- `rague/evaluation/ragas_eval.py` - optional RAGAS wrapper for faithfulness and answer relevance.
+- `rague/evaluation/reporting.py` - Markdown summary renderer for evaluation runs.
+- `rague/evaluation/cli.py` - CLI entrypoint for retrieval, agent, agent-trace, and HNSW benchmark commands.
+- `data/evaluation/` - corpus-bound labeled evaluation datasets for opt-in Qdrant/LLM runs.
 
 ## `docs_design/` Navigation
 
 - `docs_design/architecture.md` - early architecture draft for RAG, hybrid retrieval, reranking, Qdrant, agentic workflow, and citation metrics.
+- `docs_design/evaluations/` - evaluation iteration records: one Markdown file per experiment with config, metrics, and delta from previous iteration.
+- `docs_design/evaluations/README.md` - naming convention (`NNN_description.md`), required sections, and iteration index.
+- `docs_design/evaluations/001_baseline-hybrid-agentic-rag.md` - iteration 001 baseline: E5 embeddings, bge reranker, hybrid retrieval, citations, agentic workflow.
+- `docs_design/evaluations/002_step-4-evaluation-baseline.md` - iteration 002: step 4 evaluation infrastructure, dataset, runners, CLI, and opt-in benchmark setup.
 - `docs_design/implementation_considerations.md` - practical notes on large Confluence spaces, duplicate discovery, and attachment ingestion.
 - `docs_design/ingestion_logging.md` - ingestion progress logging, terminal summary, chunk/attachment stats, and changelog reporting rules.
 - `docs_design/ingestion_plan.md` - planning notes and architectural decisions for collecting Confluence data into Qdrant.
@@ -78,6 +97,22 @@ description of its contents and purpose.
 - `tests/test_bm25_index.py` - unit tests for BM25 tokenizer, ranking, refresh, and metadata preservation.
 - `tests/test_citations.py` - unit tests for citation context, claim linking, metadata pass-through, and Markdown formatting.
 - `tests/test_citation_metrics.py` - unit tests for citation rate metric on structured cited answers.
+- `tests/fixtures/evaluation/` - local labeled evaluation dataset fixtures without Confluence or Qdrant dependencies.
+- `tests/test_evaluation_metrics.py` - unit tests for retrieval metric functions and edge cases.
+- `tests/test_evaluation_dataset.py` - unit tests for evaluation dataset loader and fixture validation.
+- `tests/test_evaluation_runner.py` - unit tests for deterministic retrieval evaluation runner aggregation.
+- `tests/test_evaluation_fixture_retrieval_validation.py` - opt-in Qdrant validation that fixture questions retrieve labeled pages.
+- `tests/test_evaluation_retrieval.py` - unit tests for retriever document-id adapters.
+- `tests/test_evaluation_retrieval_integration.py` - opt-in Qdrant retrieval evaluation tests.
+- `tests/test_evaluation_routing.py` - unit tests for `should_retrieve` routing evaluation.
+- `tests/test_evaluation_generation.py` - unit tests for generation correctness and citation compliance.
+- `tests/test_evaluation_agent.py` - unit tests for agent end-to-end evaluation wrapper.
+- `tests/test_evaluation_tracing.py` - unit tests for agent trace schema, traced runner, and agent-trace CLI output.
+- `tests/test_evaluation_agent_integration.py` - opt-in live agent evaluation smoke tests.
+- `tests/test_evaluation_reporting.py` - unit tests for evaluation Markdown reporting.
+- `tests/test_evaluation_ragas.py` - unit tests for optional RAGAS wrapper behavior.
+- `tests/test_hnsw_benchmark.py` - unit tests for HNSW benchmark harness.
+- `tests/test_hnsw_benchmark_integration.py` - opt-in HNSW benchmark integration tests.
 - `tests/test_agent_workflow.py` - unit and smoke tests for agent workflow routing, rewrite limits, retrieval tool wrapper, and cited answer generation.
 - `tests/test_agent_prompts.py` - unit tests for YAML prompt loader and document context formatting.
 - `tests/test_agent_parsers.py` - unit tests for structured output parsers and chunk-id filtering.

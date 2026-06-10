@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.documents import Document
+
+if TYPE_CHECKING:
+    from rague.evaluation.tracing import AgentDecisionObserver
 
 from rague.agents.parsers import (
     DocumentRelevanceOutput,
@@ -30,11 +33,13 @@ class AgentLlmDecisions:
         prompt_version_overrides: dict[str, str] | None = None,
         max_context_chars_per_doc: int = 1200,
         use_structured_output: bool = True,
+        observer: AgentDecisionObserver | None = None,
     ) -> None:
         self.chat_model = chat_model
         self.prompt_version_overrides = prompt_version_overrides or {}
         self.max_context_chars_per_doc = max_context_chars_per_doc
         self.use_structured_output = use_structured_output
+        self.observer = observer
 
     def decide_should_retrieve(self, question: str) -> bool:
         output = self._invoke_structured(
@@ -143,8 +148,15 @@ class AgentLlmDecisions:
                 structured_model = self.chat_model.with_structured_output(output_model)
                 result = structured_model.invoke(messages)
                 if isinstance(result, output_model):
-                    return result
-                return output_model.model_validate(result)
+                    output = result
+                else:
+                    output = output_model.model_validate(result)
+                self._notify_observer(
+                    task_name=task_name,
+                    variables=variables,
+                    output=output,
+                )
+                return output
             except Exception:
                 pass
 
@@ -152,7 +164,20 @@ class AgentLlmDecisions:
         content = getattr(response, "content", response)
         if not isinstance(content, str):
             content = str(content)
-        return parse_json_output(content, output_model)
+        output = parse_json_output(content, output_model)
+        self._notify_observer(task_name=task_name, variables=variables, output=output)
+        return output
+
+    def _notify_observer(
+        self,
+        *,
+        task_name: str,
+        variables: dict[str, Any],
+        output: Any,
+    ) -> None:
+        if self.observer is None:
+            return
+        self.observer.on_task_output(task_name, variables, output)
 
     def task_temperature(self, task_name: str) -> float | None:
         """Return YAML-configured temperature for a task, if present."""

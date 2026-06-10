@@ -17,6 +17,7 @@ from langgraph.graph import END, START, StateGraph
 from rague.citations import (
     build_citation_context,
     build_cited_answer_from_claim_specs,
+    format_answer_with_sources,
     format_cited_answer_markdown,
 )
 from rague.citations.models import CitationContext, CitedAnswer
@@ -162,7 +163,12 @@ def render_generated_answer(
             intro=generated.intro,
             summary=generated.summary,
         )
-        return format_cited_answer_markdown(cited_answer), cited_answer
+        answer_body = (generated.answer_text or "").strip()
+        if answer_body:
+            markdown = format_answer_with_sources(answer_body, cited_answer.sources)
+        else:
+            markdown = format_cited_answer_markdown(cited_answer)
+        return markdown, cited_answer
 
     if generated.answer_text:
         return generated.answer_text.strip(), None

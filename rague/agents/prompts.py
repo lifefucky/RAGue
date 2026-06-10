@@ -121,6 +121,29 @@ def load_prompt_config_bundle(task_name: str) -> PromptConfig:
     )
 
 
+def render_document_content_for_context(document: Document) -> str:
+    """Render document body for agent prompt context, expanding code summaries."""
+    summary = document.page_content.strip()
+    metadata = document.metadata or {}
+
+    if metadata.get("chunk_type") != "code_summary":
+        return summary
+
+    raw_code = metadata.get("raw_code")
+    if raw_code is None or not str(raw_code).strip():
+        return summary
+
+    language = str(metadata.get("code_language") or "").strip()
+    fence_open = f"```{language}" if language else "```"
+    code_block = f"{fence_open}\n{str(raw_code).strip()}\n```"
+
+    parts: list[str] = []
+    if summary:
+        parts.append(summary)
+    parts.extend(["full_code:", code_block])
+    return "\n\n".join(parts)
+
+
 def build_chat_prompt(task_name: str, version: str | None = None) -> ChatPromptTemplate:
     """Build a LangChain chat prompt from YAML config."""
     prompt_version = load_prompt_config(task_name, version=version)
@@ -151,7 +174,7 @@ def format_documents_context(
         rerank_score = metadata.get("rerank_score")
         score_text = f"{rerank_score:.4f}" if isinstance(rerank_score, (int, float)) else "n/a"
 
-        content = document.page_content.strip()
+        content = render_document_content_for_context(document)
         if len(content) > max_chars_per_doc:
             content = content[: max_chars_per_doc - 3].rstrip() + "..."
 

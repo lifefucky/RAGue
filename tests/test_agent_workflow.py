@@ -214,6 +214,60 @@ def test_render_generated_answer_with_claim_specs() -> None:
     assert "## Источники" in answer_text
 
 
+def test_render_generated_answer_cohesive_text_with_filtered_sources() -> None:
+    documents = [
+        Document(
+            page_content="Debezium SQL config",
+            metadata={
+                "source_type": "confluence",
+                "document_type": "page",
+                "document_id": "confluence:page:131304166",
+                "chunk_id": "chunk-debezium",
+                "page_id": "131304166",
+                "title": "Debezium setup",
+                "path": "Data/Debezium",
+                "source": "https://wiki.example/pages/viewpage.action?pageId=131304166",
+                "source_updated_at": "2026-06-06T10:00:00+00:00",
+                "ingested_at": "2026-06-06T11:00:00+00:00",
+            },
+            id="chunk-debezium",
+        ),
+        Document(
+            page_content="Kafka topic config",
+            metadata={
+                "source_type": "confluence",
+                "document_type": "page",
+                "document_id": "confluence:page:131304999",
+                "chunk_id": "chunk-kafka",
+                "page_id": "131304999",
+                "title": "Kafka setup",
+                "path": "Data/Kafka",
+                "source": "https://wiki.example/pages/viewpage.action?pageId=131304999",
+                "source_updated_at": "2026-06-06T10:00:00+00:00",
+                "ingested_at": "2026-06-06T11:00:00+00:00",
+            },
+            id="chunk-kafka",
+        ),
+    ]
+    context = build_citation_context(documents)
+
+    answer_text, cited_answer = render_generated_answer(
+        GeneratedAnswer(
+            answer_text="Debezium connector is configured via SQL.",
+            claim_specs=[("Debezium SQL config.", ["chunk-debezium"])],
+        ),
+        context,
+    )
+
+    assert cited_answer is not None
+    assert len(cited_answer.sources) == 1
+    assert "Debezium connector is configured via SQL." in answer_text
+    assert "## Источники" in answer_text
+    assert "Debezium setup" in answer_text
+    assert "Kafka setup" not in answer_text
+    assert "Debezium SQL config. [1]" not in answer_text
+
+
 def test_smoke_cases_from_metrics_doc() -> None:
     smoke_cases = [
         {

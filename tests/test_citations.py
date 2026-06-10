@@ -271,6 +271,65 @@ def test_cite_claim_unknown_chunk_id_warns() -> None:
     assert "missing-chunk" in warnings[0].message
 
 
+def _distinct_page_doc(
+    *,
+    chunk_id: str,
+    document_id: str,
+    page_id: str,
+    title: str,
+    source: str,
+    path: str,
+    text: str = "sample",
+) -> Document:
+    metadata = {
+        "source_type": "confluence",
+        "document_type": "page",
+        "document_id": document_id,
+        "chunk_id": chunk_id,
+        "page_id": page_id,
+        "title": title,
+        "path": path,
+        "source": source,
+        "source_updated_at": "2026-06-06T10:00:00+00:00",
+        "ingested_at": "2026-06-06T11:00:00+00:00",
+    }
+    return Document(page_content=text, metadata=metadata, id=chunk_id)
+
+
+def test_build_cited_answer_from_claim_specs_filters_uncited_sources() -> None:
+    context = build_citation_context(
+        [
+            _distinct_page_doc(
+                chunk_id="chunk-debezium",
+                document_id="confluence:page:131304166",
+                page_id="131304166",
+                title="Debezium setup",
+                source="https://wiki.example/pages/viewpage.action?pageId=131304166",
+                path="Data/Debezium",
+            ),
+            _distinct_page_doc(
+                chunk_id="chunk-kafka",
+                document_id="confluence:page:131304999",
+                page_id="131304999",
+                title="Kafka setup",
+                source="https://wiki.example/pages/viewpage.action?pageId=131304999",
+                path="Data/Kafka",
+            ),
+        ]
+    )
+
+    answer = build_cited_answer_from_claim_specs(
+        [("Debezium connector is configured via SQL.", ["chunk-debezium"])],
+        context,
+    )
+
+    assert len(answer.sources) == 1
+    assert answer.sources[0].title == "Debezium setup"
+    rendered = format_cited_answer_markdown(answer)
+    assert "Debezium setup" in rendered
+    assert "Kafka setup" not in rendered
+
+
 def test_format_cited_answer_markdown_renders_claim_markers_and_sources() -> None:
     context = build_citation_context(
         [

@@ -1,0 +1,13 @@
+[
+  {
+    "id": "example-fact-lookup",
+    "question": "Example question about a documented process or fact",
+    "expected_answer_contains": ["keyword-a", "keyword-b"],
+    "relevant_docs": ["page-001"],
+    "relevant_id_field": "page_id",
+    "query_type": "fact_lookup",
+    "should_retrieve": true,
+    "should_cite": true,
+    "notes": "Copy this file, replace placeholders with your corpus labels, and point --dataset to your copy."
+  }
+]

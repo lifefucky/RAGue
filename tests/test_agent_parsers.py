@@ -55,3 +55,18 @@ def test_generated_output_to_generated_answer_with_claim_specs() -> None:
     assert generated.claim_specs == [("Answer claim.", ["chunk-1"])]
     assert generated.intro == "Intro"
     assert generated.summary == "Summary"
+
+
+def test_generated_output_to_generated_answer_preserves_answer_text_with_claims() -> None:
+    output = GeneratedAnswerOutput(
+        answer_text="Full cohesive answer for the user.",
+        claims=[ClaimOutput(text="Supporting fact.", chunk_ids=["chunk-1"])],
+    )
+
+    generated = generated_output_to_generated_answer(
+        output,
+        allowed_chunk_ids={"chunk-1"},
+    )
+
+    assert generated.answer_text == "Full cohesive answer for the user."
+    assert generated.claim_specs == [("Supporting fact.", ["chunk-1"])]

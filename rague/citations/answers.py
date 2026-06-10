@@ -86,9 +86,18 @@ def build_cited_answer_from_claim_specs(
         built_claims.append(cited_claim)
         warnings.extend(claim_warnings)
 
+    cited_source_ids = {
+        ref.source_id
+        for claim in built_claims
+        for ref in claim.citation_refs
+    }
+    cited_sources = [
+        source for source in context.sources if source.source_id in cited_source_ids
+    ]
+
     return CitedAnswer(
         claims=built_claims,
-        sources=list(context.sources),
+        sources=cited_sources,
         warnings=warnings,
         intro=intro,
         summary=summary,
